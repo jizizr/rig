@@ -30,8 +30,8 @@ pub const GEMINI_1_0_PRO: &str = "gemini-1.0-pro";
 use self::gemini_api_types::Schema;
 use crate::providers::gemini::streaming::StreamingCompletionResponse;
 use crate::{
-    completion::{self, CompletionError, CompletionRequest},
     OneOrMany,
+    completion::{self, CompletionError, CompletionRequest},
 };
 use gemini_api_types::{
     Content, FunctionDeclaration, GenerateContentRequest, GenerateContentResponse,
@@ -243,7 +243,7 @@ impl TryFrom<GenerateContentResponse> for completion::CompletionResponse<Generat
                     _ => {
                         return Err(CompletionError::ResponseError(
                             "Response did not contain a message or tool call".into(),
-                        ))
+                        ));
                     }
                 })
             })
@@ -269,14 +269,14 @@ pub mod gemini_api_types {
     // Gemini API Types
     // =================================================================
     use serde::{Deserialize, Serialize};
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
 
     use crate::{
+        OneOrMany,
         completion::CompletionError,
         message::{self, MessageError, MimeType as _},
         one_or_many::string_or_one_or_many,
         providers::gemini::gemini_api_types::{CodeExecutionResult, ExecutableCode},
-        OneOrMany,
     };
 
     /// Response from the model supporting multiple candidate responses.
@@ -342,7 +342,7 @@ pub mod gemini_api_types {
                     parts: content.try_map(|c| c.try_into())?,
                     role: Some(Role::User),
                 },
-                message::Message::Assistant { content } => Content {
+                message::Message::Assistant { content, .. } => Content {
                     role: Some(Role::Model),
                     parts: content.map(|content| content.into()),
                 },
@@ -389,19 +389,20 @@ pub mod gemini_api_types {
                                     _ => {
                                         return Err(message::MessageError::ConversionError(
                                             format!("Unsupported media type {mime_type:?}"),
-                                        ))
+                                        ));
                                     }
                                 }
                             }
                             _ => {
                                 return Err(message::MessageError::ConversionError(format!(
                                     "Unsupported gemini content part type: {part:?}"
-                                )))
+                                )));
                             }
                         })
                     })?,
                 }),
                 Some(Role::Model) => Ok(message::Message::Assistant {
+                    id: None,
                     content: content.parts.try_map(|part| {
                         Ok(match part {
                             Part::Text(text) => message::AssistantContent::text(text),
@@ -411,7 +412,7 @@ pub mod gemini_api_types {
                             _ => {
                                 return Err(message::MessageError::ConversionError(format!(
                                     "Unsupported part type: {part:?}"
-                                )))
+                                )));
                             }
                         })
                     })?,
@@ -468,13 +469,13 @@ pub mod gemini_api_types {
         fn try_from(content: message::UserContent) -> Result<Self, Self::Error> {
             match content {
                 message::UserContent::Text(message::Text { text }) => Ok(Self::Text(text)),
-                message::UserContent::ToolResult(message::ToolResult { id, content }) => {
+                message::UserContent::ToolResult(message::ToolResult { id, content, .. }) => {
                     let content = match content.first() {
                         message::ToolResultContent::Text(text) => text.text,
                         message::ToolResultContent::Image(_) => {
                             return Err(message::MessageError::ConversionError(
                                 "Tool result content must be text".to_string(),
-                            ))
+                            ));
                         }
                     };
                     // Convert to JSON since this value may be a valid JSON value
@@ -588,6 +589,7 @@ pub mod gemini_api_types {
         fn from(function_call: FunctionCall) -> Self {
             Self {
                 id: function_call.name.clone(),
+                call_id: None,
                 function: message::ToolFunction {
                     name: function_call.name,
                     arguments: function_call.args,
@@ -1178,6 +1180,7 @@ mod tests {
     fn test_message_conversion_tool_call() {
         let tool_call = message::ToolCall {
             id: "test_tool".to_string(),
+            call_id: None,
             function: message::ToolFunction {
                 name: "test_function".to_string(),
                 arguments: json!({"arg1": "value1"}),
@@ -1185,6 +1188,7 @@ mod tests {
         };
 
         let msg = message::Message::Assistant {
+            id: None,
             content: OneOrMany::one(message::AssistantContent::ToolCall(tool_call)),
         };
 

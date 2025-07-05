@@ -30,7 +30,7 @@
 
 use std::marker::PhantomData;
 
-use schemars::{schema_for, JsonSchema};
+use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -103,6 +103,14 @@ where
 
         Ok(serde_json::from_value(raw_data)?)
     }
+
+    pub async fn get_inner(&self) -> &Agent<M> {
+        &self.agent
+    }
+
+    pub async fn into_inner(self) -> Agent<M> {
+        self.agent
+    }
 }
 
 /// Builder for the Extractor
@@ -148,6 +156,12 @@ impl<T: JsonSchema + for<'a> Deserialize<'a> + Serialize + Send + Sync, M: Compl
 
     pub fn additional_params(mut self, params: serde_json::Value) -> Self {
         self.agent_builder = self.agent_builder.additional_params(params);
+        self
+    }
+
+    /// Set the maximum number of tokens for the completion
+    pub fn max_tokens(mut self, max_tokens: u64) -> Self {
+        self.agent_builder = self.agent_builder.max_tokens(max_tokens);
         self
     }
 

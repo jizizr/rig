@@ -1,5 +1,6 @@
 use futures::{Stream, StreamExt};
 use rig::{
+    OneOrMany,
     agent::Agent,
     client::{CompletionClient, ProviderClient},
     completion::{self, CompletionError, CompletionModel, PromptError, ToolDefinition},
@@ -7,7 +8,6 @@ use rig::{
     providers::anthropic,
     streaming::StreamingCompletion,
     tool::{Tool, ToolSetError},
-    OneOrMany,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -17,11 +17,11 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 enum StreamingError {
     #[error("CompletionError: {0}")]
-    CompletionError(#[from] CompletionError),
+    Completion(#[from] CompletionError),
     #[error("PromptError: {0}")]
-    PromptError(#[from] PromptError),
+    Prompt(#[from] PromptError),
     #[error("ToolSetError: {0}")]
-    ToolError(#[from] ToolSetError),
+    Tool(#[from] ToolSetError),
 }
 
 type StreamingResult = Pin<Box<dyn Stream<Item = Result<Text, StreamingError>> + Send>>;
@@ -44,10 +44,10 @@ async fn main() -> anyhow::Result<()> {
         .agent(anthropic::CLAUDE_3_5_SONNET)
         .preamble(
             "You are an assistant here to help the user select which tool is most appropriate to perform arithmetic operations.
-            Follow these instructions closely. 
+            Follow these instructions closely.
             1. Consider the user's request carefully and identify the core elements of the request.
-            2. Select which tool among those made available to you is appropriate given the context. 
-            3. This is very important: never perform the operation yourself. 
+            2. Select which tool among those made available to you is appropriate given the context.
+            3. This is very important: never perform the operation yourself.
             "
         )
         .tool(Add)
@@ -124,6 +124,7 @@ where
             // Add (parallel) tool calls to chat history
             if !tool_calls.is_empty() {
                 chat_history.push(Message::Assistant {
+                    id: None,
                     content: OneOrMany::many(tool_calls).expect("Impossible EmptyListError"),
                 });
             }
@@ -158,11 +159,11 @@ async fn custom_stream_to_stdout(stream: &mut StreamingResult) -> Result<(), std
     while let Some(content) = stream.next().await {
         match content {
             Ok(Text { text }) => {
-                print!("{}", text);
+                print!("{text}");
                 std::io::Write::flush(&mut std::io::stdout())?;
             }
             Err(err) => {
-                eprintln!("Error: {}", err);
+                eprintln!("Error: {err}");
             }
         }
     }

@@ -8,24 +8,24 @@
 //!
 //! let gpt4o = client.completion_model(groq::GPT_4O);
 //! ```
-use super::openai::{send_compatible_streaming_request, CompletionResponse, TranscriptionResponse};
+use super::openai::{CompletionResponse, TranscriptionResponse, send_compatible_streaming_request};
 use crate::client::{CompletionClient, TranscriptionClient};
 use crate::json_utils::merge;
 use crate::providers::openai;
 use crate::streaming::StreamingCompletionResponse;
 use crate::{
+    OneOrMany,
     completion::{self, CompletionError, CompletionRequest},
     json_utils,
     message::{self, MessageError},
     providers::openai::ToolDefinition,
     transcription::{self, TranscriptionError},
-    OneOrMany,
 };
 use reqwest::multipart::Part;
 use rig::client::ProviderClient;
 use rig::impl_conversion_traits;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 // ================================================================
 // Main Groq Client
@@ -167,6 +167,7 @@ impl TryFrom<Message> for message::Message {
                 ),
             }),
             "assistant" => Ok(Self::Assistant {
+                id: None,
                 content: OneOrMany::one(
                     message
                         .content
@@ -198,7 +199,7 @@ impl TryFrom<message::Message> for Message {
                     _ => None,
                 }),
             }),
-            message::Message::Assistant { content } => {
+            message::Message::Assistant { content, .. } => {
                 let mut text_content: Option<String> = None;
 
                 for c in content.iter() {
@@ -217,7 +218,7 @@ impl TryFrom<message::Message> for Message {
                         message::AssistantContent::ToolCall(_tool_call) => {
                             return Err(MessageError::ConversionError(
                                 "Tool calls do not exist on this message".into(),
-                            ))
+                            ));
                         }
                     }
                 }
